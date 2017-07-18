@@ -10,6 +10,7 @@ Run full scene inference in sample image
 require 'torch'
 require 'cutorch'
 require 'image'
+require 'utils'
 
 --------------------------------------------------------------------------------
 -- parse arguments
@@ -78,7 +79,9 @@ local img = image.load(config.img)
 local h,w = img:size(2),img:size(3)
 
 -- forward all scales
+timer = torch.Timer()
 infer:forward(img)
+print('| inference time: ' .. round(timer:time().real, 2) .. 's')
 
 -- get top propsals
 local masks,_ = infer:getTopProps(.2,h,w)

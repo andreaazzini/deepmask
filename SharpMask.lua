@@ -15,8 +15,8 @@ SharpMask class members:
 
 require 'nn'
 require 'nnx'
-require 'cunn'
-require 'cudnn'
+-- require 'cunn'
+-- require 'cudnn'
 local utils = paths.dofile('modelUtils.lua')
 
 local SharpMask, _ = torch.class('nn.SharpMask','nn.Container')
@@ -52,7 +52,8 @@ function SharpMask:__init(config)
   print(string.format('| number of paramaters net h: %d', nh))
   print(string.format('| number of paramaters net v: %d', nv))
   print(string.format('| number of paramaters total: %d', nh+nv))
-  self:cuda()
+  -- self:cuda()
+  self:float()
 end
 
 --------------------------------------------------------------------------------
@@ -63,20 +64,22 @@ function SharpMask:createVertical(config)
   local n0 = nn.Sequential()
   n0:add(nn.Linear(512,self.fSz*self.fSz*self.km))
   n0:add(nn.View(config.batch,self.km,self.fSz,self.fSz))
-  netvs[0]=n0:cuda()
+  -- netvs[0]=n0:cuda()
+  netvs[0]=n0
 
   for i = 1, #self.skpos do
     local netv = nn.Sequential()
     local nInps = self.km/2^(i-1)
 
     netv:add(nn.SpatialSymmetricPadding(1,1,1,1))
-    netv:add(cudnn.SpatialConvolution(nInps,nInps,3,3,1,1))
-    netv:add(cudnn.ReLU())
+    netv:add(nn.SpatialConvolution(nInps,nInps,3,3,1,1))
+    netv:add(nn.ReLU())
 
     netv:add(nn.SpatialSymmetricPadding(1,1,1,1))
-    netv:add(cudnn.SpatialConvolution(nInps,nInps/2,3,3,1,1))
+    netv:add(nn.SpatialConvolution(nInps,nInps/2,3,3,1,1))
 
-    table.insert(netvs,netv:cuda())
+    -- table.insert(netvs,netv:cuda())
+    table.insert(netvs,netv)
   end
 
   self.netvs = netvs
@@ -100,17 +103,18 @@ function SharpMask:createHorizontal(config)
     if crop ~= 0 then h:add(nn.SpatialZeroPadding(crop,crop,crop,crop)) end
 
     h:add(nn.SpatialSymmetricPadding(1,1,1,1))
-    h:add(cudnn.SpatialConvolution(nhu1,nhu2,3,3,1,1))
-    h:add(cudnn.ReLU())
+    h:add(nn.SpatialConvolution(nhu1,nhu2,3,3,1,1))
+    h:add(nn.ReLU())
 
     h:add(nn.SpatialSymmetricPadding(1,1,1,1))
-    h:add(cudnn.SpatialConvolution(nhu2,nInps,3,3,1,1))
-    h:add(cudnn.ReLU())
+    h:add(nn.SpatialConvolution(nhu2,nInps,3,3,1,1))
+    h:add(nn.ReLU())
 
     h:add(nn.SpatialSymmetricPadding(1,1,1,1))
-    h:add(cudnn.SpatialConvolution(nInps,nInps/2,3,3,1,1))
+    h:add(nn.SpatialConvolution(nInps,nInps/2,3,3,1,1))
 
-    table.insert(neths,h:cuda())
+    -- table.insert(neths,h:cuda())
+    table.insert(neths, h)
   end
 
   self.neths = neths
@@ -124,10 +128,11 @@ function SharpMask:refinement(neth,netv)
    local par = nn.ParallelTable():add(neth):add(netv)
    ref:add(par)
    ref:add(nn.CAddTable(2))
-   ref:add(cudnn.ReLU())
+   ref:add(nn.ReLU())
    ref:add(nn.SpatialUpSamplingNearest(2))
 
-   return ref:cuda()
+   -- return ref:cuda()
+   return ref
 end
 
 function SharpMask:createTopDownRefinement(config)
@@ -145,7 +150,7 @@ function SharpMask:createTopDownRefinement(config)
 
   local finalref = refs[#refs]
   finalref:add(nn.SpatialSymmetricPadding(1,1,1,1))
-  finalref:add(cudnn.SpatialConvolution((self.km)/2^(#refs),1,3,3,1,1))
+  finalref:add(nn.SpatialConvolution((self.km)/2^(#refs),1,3,3,1,1))
   finalref:add(nn.View(config.batch,config.gSz*config.gSz))
 
   self.refs = refs
@@ -239,17 +244,19 @@ function SharpMask:inference(np)
   self.refs[#self.refs]:remove()
 
   -- remove ZeroPaddings
-  self.trunk.modules[8]=nn.Identity():cuda()
+  self.trunk.modules[8]=nn.Identity()
+  -- self.trunk.modules[8]=nn.Identity():cuda()
   for k = 1, #self.refs do
     local m = self.refs[k].modules[1].modules[1].modules[1]
     if torch.typename(m):find('SpatialZeroPadding') then
-      self.refs[k].modules[1].modules[1].modules[1]=nn.Identity():cuda()
+      self.refs[k].modules[1].modules[1].modules[1]=nn.Identity()
     end
   end
 
   -- remove horizontal links, as they are applied convolutionally
   for k = 1, #self.refs do
-    self.refs[k].modules[1].modules[1]=nn.Identity():cuda()
+    -- self.refs[k].modules[1].modules[1]=nn.Identity():cuda()
+    self.refs[k].modules[1].modules[1]=nn.Identity()
   end
 
   -- modify number of batch to np (number of proposals)
@@ -260,7 +267,7 @@ function SharpMask:inference(np)
   utils.linear2convHead(self.scoreBranch)
   self.maskBranchDM = self.maskBranchDM.modules[1]
 
-  self:cuda()
+  -- self:cuda()
 end
 
 --------------------------------------------------------------------------------

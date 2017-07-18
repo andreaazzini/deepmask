@@ -72,7 +72,8 @@ Infer.__init = argcheck{
 
 --------------------------------------------------------------------------------
 -- function: forward
-local inpPad = torch.CudaTensor()
+-- local inpPad = torch.CudaTensor()
+local inpPad = torch.FloatTensor()
 function Infer:forward(input)
   if input:type() == 'torch.CudaTensor' then input = input:float() end
 
@@ -84,7 +85,8 @@ function Infer:forward(input)
   -- forward all scales through network
   local outPyramidMask,outPyramidScore = {},{}
   for i,_ in pairs(inpPyramid) do
-    local inp = inpPyramid[i]:cuda()
+    -- local inp = inpPyramid[i]:cuda()
+    inp = inpPyramid[i]
     local h,w = inp:size(2),inp:size(3)
 
     -- padding/normalize
@@ -92,26 +94,26 @@ function Infer:forward(input)
     inpPad:resize(1,3,h+2*self.bw,w+2*self.bw):fill(.5)
     inpPad:narrow(1,1,1):narrow(3,self.bw+1,h):narrow(4,self.bw+1,w):copy(inp)
     for i=1,3 do inpPad[1][i]:add(-self.mean[i]):div(self.std[i]) end
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,2,1):add(sys.toc()) end
 
     -- forward trunk
     if self.timer then sys.tic() end
     local outTrunk = self.trunk:forward(inpPad):squeeze()
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,3,1):add(sys.toc()) end
 
     -- forward score branch
     if self.timer then sys.tic() end
     local outScore = self.sHead:forward(outTrunk)
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,4,1):add(sys.toc()) end
     table.insert(outPyramidScore,outScore:clone():squeeze())
 
     -- forward mask branch
     if self.timer then sys.tic() end
     local outMask = self.mHead:forward(outTrunk)
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,5,1):add(sys.toc()) end
     table.insert(outPyramidMask,outMask:float():squeeze())
   end

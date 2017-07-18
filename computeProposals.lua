@@ -5,10 +5,11 @@ LICENSE file in the root directory of this source tree. An additional grant
 of patent rights can be found in the PATENTS file in the same directory.
 
 Run full scene inference in sample image
-------------------------------------------------------------------------------]]
+-----------------------------------------------------------------------------]]
 
 require 'torch'
 require 'cutorch'
+require 'cudnn'
 require 'image'
 require 'utils'
 
@@ -33,7 +34,7 @@ local config = cmd:parse(arg)
 --------------------------------------------------------------------------------
 -- various initializations
 torch.setdefaulttensortype('torch.FloatTensor')
-cutorch.setDevice(config.gpu)
+-- cutorch.setDevice(config.gpu)
 
 local coco = require 'coco'
 local maskApi = coco.MaskApi
@@ -41,7 +42,7 @@ local maskApi = coco.MaskApi
 local meanstd = {mean = { 0.485, 0.456, 0.406 }, std = { 0.229, 0.224, 0.225 }}
 
 --------------------------------------------------------------------------------
--- load moodel
+-- load model
 paths.dofile('DeepMask.lua')
 paths.dofile('SharpMask.lua')
 
@@ -49,7 +50,26 @@ print('| loading model file... ' .. config.model)
 local m = torch.load(config.model..'/model.t7')
 local model = m.model
 model:inference(config.np)
-model:cuda()
+
+-- convert model from cudnn to nn
+cudnn.convert(model.scoreBranch, nn)
+cudnn.convert(model.trunk, nn)
+
+if (config.model == 'pretrained/deepmask') then
+  cudnn.convert(model.maskBranch, nn)
+elseif (config.model == 'pretrained/sharpmask') then
+  cudnn.convert(model.maskBranchDM, nn)
+  for i=0,4 do
+    cudnn.convert(model.refs[i], nn)
+    cudnn.convert(model.netvs[i], nn)
+  end
+  for i=1,4 do cudnn.convert(model.neths[i], nn) end
+  print({model})
+else
+  print('Unknown model, cannot convert')
+end
+
+-- model:cuda()
 
 --------------------------------------------------------------------------------
 -- create inference module

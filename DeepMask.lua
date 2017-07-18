@@ -14,8 +14,8 @@ DeepMask class members:
 
 require 'nn'
 require 'nnx'
-require 'cunn'
-require 'cudnn'
+-- require 'cunn'
+-- require 'cudnn'
 paths.dofile('SpatialSymmetricPadding.lua')
 local utils = paths.dofile('modelUtils.lua')
 
@@ -65,8 +65,8 @@ function DeepMask:createTrunk(config)
   trunk:add(nn.SpatialZeroPadding(-1,-1,-1,-1))
 
   -- add common extra layers
-  trunk:add(cudnn.SpatialConvolution(1024,128,1,1,1,1))
-  trunk:add(cudnn.ReLU())
+  trunk:add(nn.SpatialConvolution(1024,128,1,1,1,1))
+  trunk:add(nn.ReLU())
   trunk:add(nn.View(config.batch,128*self.fSz*self.fSz))
   trunk:add(nn.Linear(128*self.fSz*self.fSz,512))
 
@@ -78,7 +78,7 @@ function DeepMask:createTrunk(config)
   -- symmetricPadding
   utils.updatePadding(trunk, nn.SpatialSymmetricPadding)
 
-  self.trunk = trunk:cuda()
+  -- self.trunk = trunk:cuda()
   return trunk
 end
 
@@ -89,7 +89,7 @@ function DeepMask:createMaskBranch(config)
 
   -- maskBranch
   maskBranch:add(nn.Linear(512,config.oSz*config.oSz))
-  self.maskBranch = nn.Sequential():add(maskBranch:cuda())
+  -- self.maskBranch = nn.Sequential():add(maskBranch:cuda())
 
   -- upsampling layer
   if config.gSz > config.oSz then
@@ -117,7 +117,7 @@ function DeepMask:createScoreBranch(config)
   scoreBranch:add(nn.Dropout(.5))
   scoreBranch:add(nn.Linear(1024,1))
 
-  self.scoreBranch = scoreBranch:cuda()
+  -- self.scoreBranch = scoreBranch:cuda()
   return self.scoreBranch
 end
 
@@ -157,7 +157,8 @@ function DeepMask:inference()
   utils.linear2convHead(self.maskBranch.modules[1])
   self.maskBranch = self.maskBranch.modules[1]
 
-  self:cuda()
+  -- self:cuda()
+  self:float()
 end
 
 --------------------------------------------------------------------------------

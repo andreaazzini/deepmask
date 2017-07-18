@@ -60,13 +60,16 @@ Infer.__init = argcheck{
       self.topScores, self.topMasks = torch.Tensor(), torch.ByteTensor()
       local topPatches
       if self.dm then
-        topPatches = torch.CudaTensor(self.np,512):zero()
+        -- topPatches = torch.CudaTensor(self.np,512):zero()
+        topPatches = torch.FloatTensor(self.np,512):zero()
       else
         topPatches = {}
-        topPatches[1] = torch.CudaTensor(self.np,512):zero()
+        -- topPatches[1] = torch.CudaTensor(self.np,512):zero()
+        topPatches[1] = torch.FloatTensor(self.np,512):zero()
         for j = 1, #model.refs do
           local sz = model.fSz*2^(j-1)
-          topPatches[j+1] = torch.CudaTensor(self.np,model.ks/2^(j),sz,sz)
+          -- topPatches[j+1] = torch.CudaTensor(self.np,model.ks/2^(j),sz,sz)
+          topPatches[j+1] = torch.FloatTensor(self.np,model.ks/2^(j),sz,sz)
         end
       end
       self.topPatches = topPatches
@@ -75,7 +78,8 @@ Infer.__init = argcheck{
 
 --------------------------------------------------------------------------------
 -- function: forward
-local inpPad = torch.CudaTensor()
+-- local inpPad = torch.CudaTensor()
+local inpPad = torch.FloatTensor()
 function Infer:forward(input,id)
   if input:type() == 'torch.CudaTensor' then input = input:float() end
 
@@ -87,7 +91,8 @@ function Infer:forward(input,id)
   -- forward all scales through network
   local outPyramidTrunk,outPyramidScore,outPyramidSkip = {},{},{}
   for i,_ in pairs(inpPyramid) do
-    local inp = inpPyramid[i]:cuda()
+    -- local inp = inpPyramid[i]:cuda()
+    local inp = inpPyramid[i]
     local h,w = inp:size(2),inp:size(3)
 
     -- padding/normalize
@@ -95,20 +100,20 @@ function Infer:forward(input,id)
     inpPad:resize(1,3,h+2*self.bw,w+2*self.bw):fill(.5)
     inpPad:narrow(1,1,1):narrow(3,self.bw+1,h):narrow(4,self.bw+1,w):copy(inp)
     for i=1,3 do inpPad[1][i]:add(-self.mean[i]):div(self.std[i]) end
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,2,1):add(sys.toc()) end
 
     -- forward trunk
     if self.timer then sys.tic() end
     local outTrunk = self.trunk:forward(inpPad)
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,3,1):add(sys.toc()) end
     table.insert(outPyramidTrunk,outTrunk:clone():squeeze())
 
     -- forward score branch
     if self.timer then sys.tic() end
     local outScore = self.sBranch:forward(outTrunk)
-    cutorch.synchronize()
+    -- cutorch.synchronize()
     if self.timer then self.timer:narrow(1,4,1):add(sys.toc()) end
     table.insert(outPyramidScore,outScore:clone():squeeze())
 
@@ -118,7 +123,7 @@ function Infer:forward(input,id)
       for k,neth in pairs(self.neths) do
         if self.timer then sys.tic() end
         neth:forward(self.trunk.modules[self.skpos[k]].output)
-        cutorch.synchronize()
+        -- cutorch.synchronize()
         if self.timer then self.timer:narrow(1,5,1):add(sys.toc()) end
         hOuts[k] = neth.output:clone()
       end
@@ -166,7 +171,7 @@ function Infer:forwardRefinement(input)
   for i = 1,#self.refs do
     currentOutput = self.refs[i]:forward({input[i+1],currentOutput})
   end
-  cutorch.synchronize()
+  -- cutorch.synchronize()
   self.output = currentOutput
   return self.output
 end
@@ -213,7 +218,7 @@ function Infer:getTopPatches(outPyramidTrunk,outPyramidSkip)
       :copy(patch)
     end
   end
-  cutorch.synchronize()
+  -- cutorch.synchronize()
   collectgarbage()
 end
 
